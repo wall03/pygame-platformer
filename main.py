@@ -36,23 +36,21 @@ player_angle = 0 #radians
 
 #borundries
 boundries = [
-    ((screen.get_width()/2,player_radius * 3),(screen.get_width()/2,screen.get_height() - player_radius * 3)),
-    ((0,300),(300,screen.get_height())),
     ((0,0),(0,screen.get_height()-1)),
     ((0,0),(screen.get_width()-1,0)),
     ((screen.get_width()-1,0),(screen.get_width()-1,screen.get_height()-1)),
     ((0,screen.get_height()-1),(screen.get_width()-1,screen.get_height()-1))
 ]
+initial_boundries = boundries.copy()
 
 #bounciness of each line
-bouncy_boundries = [
-    1.1,
+initial_bouncy_boundries = [
     0.8,
-    0.7,
-    0.7,
-    0.7,
-    0.7,
+    0.8,
+    0.8,
+    0.8,
 ]
+bouncy_boundries = initial_bouncy_boundries.copy()
 
 
 def draw_arrow(
@@ -175,6 +173,9 @@ while running:
             player_momentum.x -= acceleration * dt
         if keys[pygame.K_d]:
             player_momentum.x += acceleration * dt
+        if keys[pygame.K_ESCAPE]: # reset boundries created by user
+            boundries = initial_boundries.copy()
+            bouncy_boundries = initial_bouncy_boundries.copy()
 
         if dash_requested:
             hold_duration = current_ticks - charge_start_ms
@@ -186,6 +187,16 @@ while running:
             player_momentum.y += math.sin(direction) * dash_speed
             dash_requested = False
             freeze_available = True
+
+            # add boundries that are behind and perpendicular to the player's direction for interesting stuff
+            boundries.append((
+                (player_radius*math.cos(direction + math.pi/2)+player_pos.x+player_radius*math.cos(direction + math.pi), 
+                 player_radius*math.sin(direction + math.pi/2)+player_pos.y+player_radius*math.sin(direction + math.pi)),
+                (player_radius*math.cos(direction - math.pi/2)+player_pos.x+player_radius*math.cos(direction - math.pi),
+                 player_radius*math.sin(direction - math.pi/2)+player_pos.y+player_radius*math.sin(direction - math.pi))
+            ))
+
+            bouncy_boundries.append(1.2)  # make these extra boundries extra bouncy for fun interactions
 
         new_player_angle = math.atan2(player_momentum.y, player_momentum.x)
         substeps = 5
@@ -212,7 +223,7 @@ while running:
             )
             swept_rect = rect.union(prev_rect)
 
-            colliding_lines = [line for line in boundries if swept_rect.clipline(*line)]
+            colliding_lines = [line for line in boundries if swept_rect.clipline(*line[0], *line[1])]
             collision = len(colliding_lines) > 0
             
             if collision:
@@ -258,7 +269,7 @@ while running:
                 # Move out of penetration with a hard cap to avoid lock-ups.
                 max_push_iterations = 200
                 push_iterations = 0
-                while any(rect.clipline(*line) for line in boundries) and push_iterations < max_push_iterations:
+                while any(rect.clipline(*line[0], *line[1]) for line in boundries) and push_iterations < max_push_iterations:
                     new_player_pos += collision_normal
                     rect = pygame.Rect(
                         new_player_pos.x - player_radius,
